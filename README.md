@@ -53,21 +53,43 @@ pristine originals, so you can retune freely without stacking changes.
 
 | Flag | Default | Meaning |
 |------|---------|---------|
+| `--offset`      | 0  | **the simple slider** — shift the WHOLE career up/down by this many AI levels |
 | `--floor-start` | 83 | first module's floor AI level |
 | `--floor-end`   | 91 | last module's floor AI level |
 | `--module-ramp` | 7  | how much a module climbs from its first event to its last |
 | `--ceiling`     | 97 | hard cap — no event's strongest opponent exceeds this |
 | `--floor-min`   | 80 | never go below this |
+| `--calib`       | 0.5| how much to lean on Kunos's own per-event tuning (0 = pure ramp, 1 = full) |
 
-Examples:
+The default (no flags) is a curated curve that works well across the whole career — most people
+never need to touch anything. If you *do* want to nudge it, `--offset` is the one-number dial:
 
 ```bash
-# harder overall, pushing just past 100 for the final seasons (best with Verve running)
-python career_ramp.py apply --floor-start 88 --floor-end 96 --ceiling 102
+python career_ramp.py apply --offset 3     # whole career 3 levels harder
+python career_ramp.py apply --offset -4    # whole career 4 levels easier
+```
+
+`--calib` blends in Kunos's original per-event difficulty so events that were hand-made tougher
+(a tricky car/track) stay proportionally tougher, without changing the overall progression. The
+other flags reshape the curve itself if you want finer control:
+
+```bash
+# push the final seasons just past 100 (best with an AI-humaniser like Verve running)
+python career_ramp.py apply --floor-end 96 --ceiling 102
 
 # flat, consistently strong difficulty with no ramp
 python career_ramp.py apply --floor-start 95 --floor-end 95 --module-ramp 0 --ceiling 95
 ```
+
+## Works alongside Verve (or any CSP AI app)
+
+This tool only sets the *number* each career race runs at — it doesn't change how the AI drives.
+So an AI-behaviour app like [Verve](https://github.com/tyleebs-hub/verve) is fully active in
+career races and stacks cleanly on top: the ramp sets the difficulty tier, Verve makes that field
+feel human (variability, mistakes, cleaner racecraft, fewer silly retirements). They don't fight —
+Verve only overrides a car's AI level when you assign it a driver profile, which career doesn't do
+by default, so the ramped values stand. Because Verve humanises even a strong field, you can
+comfortably run this a notch harder (`--offset 2..4`) than you would against bare AC AI.
 
 ## How it works / safety
 

@@ -41,7 +41,8 @@ from datetime import datetime
 
 # ------------------------------------------------------------------ config
 
-DEFAULTS = dict(floor_start=83, floor_end=91, module_ramp=7, ceiling=97, floor_min=80)
+DEFAULTS = dict(floor_start=83, floor_end=91, module_ramp=7, ceiling=97, floor_min=80,
+                calib=0.5, offset=0)
 
 # Common install locations, tried in order when --ac isn't given.
 GUESS_AC_PATHS = [
@@ -104,19 +105,36 @@ def clampi(x, lo, hi):
     return max(lo, min(hi, x))
 
 
-def plan_levels(modules, cfg):
-    """Compute the target AI_LEVEL for every event. Returns list of dicts per event."""
+def compute_targets(modules, cfg, career_dir):
+    """Target strongest-opponent AI_LEVEL for every event. Returns a dict per event.
+
+    Backbone is a positional curve: each module's floor rises across the career
+    (floor_start -> floor_end), and within a module it ramps up (event 1 -> last).
+
+    On top of that we blend in Kunos's OWN per-event tuning (`calib`): each event is nudged by
+    how much harder/easier its vanilla level was than its module's average. That keeps the events
+    Kunos hand-made tougher (a tricky car/track) proportionally tougher, so each race feels right
+    on its own -- without disturbing the overall progression (the nudge is mean-zero per module).
+    `offset` shifts the whole career up/down by one number, like a difficulty slider.
+    """
     out = []
     S = len(modules)
     for si, mod in enumerate(modules):
         s_t = si / (S - 1) if S > 1 else 0.0
         floor = lerp(cfg["floor_start"], cfg["floor_end"], s_t)
+        anchors = [read_anchor(original_path(career_dir, ini)) for ini in mod["events"]]   # from VANILLA
+        present = [a for (a, _n) in anchors if a is not None]
+        mmean = (sum(present) / len(present)) if present else 0.0
         N = len(mod["events"])
         for ei, ini in enumerate(mod["events"]):
+            a, nlines = anchors[ei]
             e_t = (ei / (N - 1)) if N > 1 else 0.0     # single-event module sits at its floor
-            raw = floor + cfg["module_ramp"] * e_t
+            positional = floor + cfg["module_ramp"] * e_t
+            calib = cfg["calib"] * ((a - mmean) if (a is not None and present) else 0.0)
+            raw = positional + calib + cfg["offset"]
             lvl = clampi(int(round(raw)), cfg["floor_min"], cfg["ceiling"])
-            out.append({"series": mod["series"], "event_idx": ei, "n_events": N, "ini": ini, "level": lvl})
+            out.append({"series": mod["series"], "event_idx": ei, "n_events": N,
+                        "ini": ini, "level": lvl, "old": a, "nlines": nlines})
     return out
 
 
@@ -155,10 +173,12 @@ def read_anchor(ini):
     return anchor_of(entries), len(entries)
 
 
-def apply_event(ini, target, cfg):
-    """Shift every AI_LEVEL so the strongest opponent = target (preserving spread). Returns
-    (old_anchor, new_anchor, n_lines_changed) or (None, None, 0) if the file has no AI_LEVEL."""
-    with open(ini, "rb") as f:
+def apply_event(src_ini, dst_ini, target, cfg):
+    """Read the VANILLA file (src), shift every AI_LEVEL so the strongest opponent = target
+    (preserving the stagger), and write the result to the live file (dst). Reading from the
+    pristine source means re-running always rebuilds from vanilla instead of stacking. Returns
+    (old_anchor, new_anchor, n_lines) or (None, None, 0) if the file has no AI_LEVEL."""
+    with open(src_ini, "rb") as f:
         data = f.read()
     lines, entries = parse_entries(data)
     if not entries:
@@ -169,10 +189,8 @@ def apply_event(ini, target, cfg):
         newv = clampi(val + delta, cfg["floor_min"], cfg["ceiling"])
         m = AI_LINE_RE.match(lines[idx])
         lines[idx] = m.group(1) + str(newv).encode() + m.group(3)
-    new = b"\n".join(lines)
-    if new != data:
-        with open(ini, "wb") as f:
-            f.write(new)
+    with open(dst_ini, "wb") as f:
+        f.write(b"\n".join(lines))
     return anchor, clampi(anchor + delta, cfg["floor_min"], cfg["ceiling"]), len(entries)
 
 
@@ -180,23 +198,30 @@ def rel_to_career(career_dir, ini):
     return os.path.relpath(ini, career_dir)
 
 
+def original_path(career_dir, ini):
+    """Where to read the VANILLA values from: the pristine backup if it exists, else the live file
+    (which is vanilla on a first run). This makes plan/apply always compute from vanilla, so the
+    calibration is stable and re-running never drifts."""
+    p = os.path.join(ORIGINAL_DIR, rel_to_career(career_dir, ini))
+    return p if os.path.isfile(p) else ini
+
+
 # ------------------------------------------------------------------ commands
 
 def cmd_plan(args, cfg, ac, career_dir):
     modules = collect_events(career_dir)
-    rows = plan_levels(modules, cfg)
+    rows = compute_targets(modules, cfg, career_dir)
     print(f"Assetto Corsa: {ac}")
     print(f"Modules (series): {len(modules)}   Events: {len(rows)}")
     print(f"Curve: floor {cfg['floor_start']}->{cfg['floor_end']}, module ramp +{cfg['module_ramp']}, "
-          f"cap {cfg['ceiling']}, min {cfg['floor_min']}\n")
+          f"cap {cfg['ceiling']}, min {cfg['floor_min']}, calib {cfg['calib']}, offset {cfg['offset']:+d}\n")
     cur = None
     for r in rows:
         if r["series"] != cur:
             cur = r["series"]
             print(f"  {cur}:")
-        old, nlines = read_anchor(r["ini"])
-        old_s = str(old) if old is not None else "--"
-        opp = f"{r['n_events']}ev, {nlines}x" if nlines > 1 else f"{r['n_events']}ev"
+        old_s = str(r["old"]) if r["old"] is not None else "--"
+        opp = f"{r['n_events']}ev, {r['nlines']}x" if r["nlines"] > 1 else f"{r['n_events']}ev"
         name = rel_to_career(career_dir, r["ini"])
         print(f"    event {r['event_idx']+1:<2} top opp {old_s:>3} -> {r['level']:<3}  ({opp})  {name}")
     lvls = [r["level"] for r in rows]
@@ -231,13 +256,13 @@ def career_dir_to_ac(career_dir):
 
 def cmd_apply(args, cfg, ac, career_dir):
     modules = collect_events(career_dir)
-    rows = plan_levels(modules, cfg)
+    rows = compute_targets(modules, cfg, career_dir)
     if not rows:
         sys.exit("error: no career events found.")
     first_time, stamp_dir = save_originals(career_dir, rows)
     changed = 0
     for r in rows:
-        _old, _new, n = apply_event(r["ini"], r["level"], cfg)
+        _old, _new, n = apply_event(original_path(career_dir, r["ini"]), r["ini"], r["level"], cfg)
         if n > 0:
             changed += 1
     lvls = [r["level"] for r in rows]
@@ -277,13 +302,18 @@ def build_parser():
     p.add_argument("--module-ramp", type=int, default=DEFAULTS["module_ramp"])
     p.add_argument("--ceiling", type=int, default=DEFAULTS["ceiling"])
     p.add_argument("--floor-min", type=int, default=DEFAULTS["floor_min"])
+    p.add_argument("--calib", type=float, default=DEFAULTS["calib"],
+                   help="how much to lean on Kunos's per-event tuning, 0..1 (default 0.5)")
+    p.add_argument("--offset", type=int, default=DEFAULTS["offset"],
+                   help="shift the WHOLE career up/down by this many AI levels (like a slider; default 0)")
     return p
 
 
 def main():
     args = build_parser().parse_args()
     cfg = dict(floor_start=args.floor_start, floor_end=args.floor_end,
-               module_ramp=args.module_ramp, ceiling=args.ceiling, floor_min=args.floor_min)
+               module_ramp=args.module_ramp, ceiling=args.ceiling, floor_min=args.floor_min,
+               calib=args.calib, offset=args.offset)
     ac = find_ac(args.ac)
     career_dir = os.path.join(ac, "content", "career")
     {"plan": cmd_plan, "apply": cmd_apply, "restore": cmd_restore}[args.command](args, cfg, ac, career_dir)
