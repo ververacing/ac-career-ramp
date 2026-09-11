@@ -1,0 +1,19 @@
+AC Career Ramp - License
+
+Copyright (c) 2026 terranitup
+
+AC Career Ramp is free to download and use.
+
+You MAY:
+- Use it freely on your own copy of Assetto Corsa.
+- Share the ORIGINAL, unmodified package, with a link back to the official source.
+
+You MAY NOT, without permission:
+- Sell it, or put it behind a paywall.
+- Re-host or mirror it on aggregator/mod-mirror sites. Link people to the official
+  source instead.
+- Redistribute modified versions as your own.
+
+AC Career Ramp is provided "as is", without warranty of any kind. It edits your own local
+Assetto Corsa career files (AI_LEVEL values only) and keeps a restorable backup, but you use
+it at your own risk. Not affiliated with Kunos Simulazioni.

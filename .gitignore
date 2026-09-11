@@ -1,0 +1,9 @@
+# local backups of the user's game files -- never commit or ship these
+backups/
+
+# python
+__pycache__/
+*.pyc
+
+# build output
+dist/
