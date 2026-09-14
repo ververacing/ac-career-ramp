@@ -13,7 +13,7 @@ events** on a two-level ramp:
 The default ceiling is **97, deliberately below 100**. Vanilla AC AI near 100 isn't "alien"
 because it's fast — it's alien because it's flawless and metronomic. Topping out around 97 keeps
 it hard without tipping into robot territory. (It pairs especially well with an AI-humanising
-app like [Verve](https://github.com/tyleebs-hub/verve), which adds mistakes and personality so
+app like [Verve](https://github.com/ververacing/verve), which adds mistakes and personality so
 even the top of the ramp feels like a real human field.)
 
 It also **preserves AC's opponent stagger.** Many events give each opponent its own `AI_LEVEL`
@@ -84,7 +84,7 @@ python career_ramp.py apply --floor-start 95 --floor-end 95 --module-ramp 0 --ce
 ## Works alongside Verve (or any CSP AI app)
 
 This tool only sets the *number* each career race runs at — it doesn't change how the AI drives.
-So an AI-behaviour app like [Verve](https://github.com/tyleebs-hub/verve) is fully active in
+So an AI-behaviour app like [Verve](https://github.com/ververacing/verve) is fully active in
 career races and stacks cleanly on top: the ramp sets the difficulty tier, Verve makes that field
 feel human (variability, mistakes, cleaner racecraft, fewer silly retirements). They don't fight —
 Verve only overrides a car's AI level when you assign it a driver profile, which career doesn't do
