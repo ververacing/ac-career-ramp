@@ -1,5 +1,11 @@
 # AC Career Ramp
 
+> **Folded into Verve (September 2026).** Everything this tool did is now built into
+> [Verve](https://github.com/ververacing/verve): Verve reads the difficulty meter and each career event's own
+> level at runtime and applies them to the AI itself -- nothing on disk is edited, the meter finally means
+> something (AC ignores the per-event level on some installs), and the ramp across the career is an option
+> in the Verve window. This repository is kept for reference and is archived.
+
 Makes the **Assetto Corsa single-player career** actually engaging and *progressively* harder.
 
 Vanilla AC hard-codes each career event's AI difficulty (`AI_LEVEL` in every `event.ini`) and
